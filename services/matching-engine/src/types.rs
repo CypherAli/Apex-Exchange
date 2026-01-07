@@ -2,18 +2,21 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrderSide {
     Buy,
     Sell,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrderType {
     Market,
     Limit,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrderStatus {
     Open,
@@ -22,6 +25,7 @@ pub enum OrderStatus {
     Cancelled,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
     pub id: Uuid,
@@ -37,6 +41,7 @@ pub struct Order {
     pub updated_at: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trade {
     pub id: Uuid,
@@ -50,6 +55,7 @@ pub struct Trade {
     pub timestamp: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderBookSnapshot {
     pub symbol: String,
