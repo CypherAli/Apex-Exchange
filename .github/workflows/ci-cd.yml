@@ -8,7 +8,7 @@ on:
 
 env:
   GO_VERSION: '1.22'
-  RUST_VERSION: '1.75'
+  RUST_VERSION: 'stable'  # Use stable instead of old 1.75
   POSTGRES_DB: trading_db_test
   POSTGRES_USER: postgres
   POSTGRES_PASSWORD: postgres
