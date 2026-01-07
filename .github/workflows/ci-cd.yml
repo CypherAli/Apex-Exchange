@@ -56,7 +56,9 @@ jobs:
       
       - name: Install dependencies
         working-directory: services/gateway
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy
       
       - name: Run migrations
         working-directory: services/gateway
@@ -188,6 +190,6 @@ jobs:
           output: 'trivy-results.sarif'
       
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'

@@ -5,12 +5,6 @@ edition = "2021"
 authors = ["Trading Platform Team"]
 description = "High-performance order matching engine for trading platform"
 
-[workspace]
-members = [
-    ".",
-    "crates/*"
-]
-
 [dependencies]
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
