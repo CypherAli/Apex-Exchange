@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
 
     // Initialize Redis connection
     let redis_client = redis::Client::open(config.redis_url.clone())?;
-    let redis_conn = redis_client.get_tokio_connection_manager().await?;
+    let redis_conn = redis_client.get_connection_manager().await?;
     info!("Connected to Redis");
 
     // Initialize matching engine
