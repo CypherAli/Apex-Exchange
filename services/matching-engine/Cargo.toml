@@ -65,6 +65,7 @@ inherits = "release"
 name = "matching-engine"
 path = "src/main.rs"
 
-[[bench]]
-name = "orderbook_benchmark"
-harness = false
+# Benchmarks - uncomment when benches/ directory is created
+# [[bench]]
+# name = "orderbook_benchmark"
+# harness = false
