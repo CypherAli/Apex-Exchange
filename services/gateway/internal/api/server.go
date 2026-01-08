@@ -6,19 +6,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/trading-platform/gateway/internal/api/handlers"
 	"github.com/trading-platform/gateway/internal/config"
+	db "github.com/trading-platform/gateway/internal/database/sqlc"
 	"github.com/trading-platform/gateway/internal/util"
 )
 
 // Server serves HTTP requests for our trading service
 type Server struct {
 	config config.Config
+	store  db.Store
 	router *gin.Engine
 }
 
 // NewServer creates a new HTTP server and setup routing
-func NewServer(cfg config.Config) *Server {
+func NewServer(cfg config.Config, store db.Store) *Server {
 	server := &Server{
 		config: cfg,
+		store:  store,
 	}
 	router := gin.Default()
 
@@ -36,8 +39,9 @@ func NewServer(cfg config.Config) *Server {
 		c.Next()
 	})
 
-	// Create user handler (for demo, we'll pass nil for store - implement later)
-	userHandler := handlers.NewUserHandler(cfg)
+	// Create handlers
+	userHandler := handlers.NewUserHandler(cfg, store)
+	accountHandler := handlers.NewAccountHandler(store)
 
 	// --- NHÓM PUBLIC ROUTES (Ai cũng gọi được) ---
 	router.POST("/api/v1/auth/register", userHandler.RegisterUser)
@@ -51,6 +55,11 @@ func NewServer(cfg config.Config) *Server {
 	// --- NHÓM PRIVATE ROUTES (Phải có Token mới gọi được) ---
 	// Tạo một nhóm route được bảo vệ bởi authMiddleware
 	authRoutes := router.Group("/").Use(authMiddleware(cfg.JWT.Secret))
+
+	// Account routes (protected)
+	authRoutes.GET("/api/v1/accounts", accountHandler.ListAccounts)
+	authRoutes.POST("/api/v1/accounts/deposit", accountHandler.AddDeposit)
+	authRoutes.GET("/api/v1/accounts/:currency", accountHandler.GetAccountBalance)
 
 	// Tạm thời thử nghiệm: Route lấy thông tin User hiện tại
 	authRoutes.GET("/api/v1/users/me", func(ctx *gin.Context) {

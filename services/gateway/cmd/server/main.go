@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/trading-platform/gateway/internal/api"
 	"github.com/trading-platform/gateway/internal/config"
+	db "github.com/trading-platform/gateway/internal/database/sqlc"
 )
 
 func main() {
@@ -20,8 +23,26 @@ func main() {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 
+	// Khởi tạo Database Connection Pool
+	ctx := context.Background()
+	connPool, err := pgxpool.New(ctx, cfg.Database.DBSource)
+	if err != nil {
+		log.Fatalf("Cannot connect to database: %v", err)
+	}
+	defer connPool.Close()
+
+	// Test database connection
+	if err := connPool.Ping(ctx); err != nil {
+		log.Fatalf("Cannot ping database: %v", err)
+	}
+
+	log.Println("✅ Database connected successfully")
+
+	// Tạo Store để quản lý database operations
+	store := db.NewStore(connPool)
+
 	// Create and start server
-	server := api.NewServer(*cfg)
+	server := api.NewServer(*cfg, store)
 
 	address := fmt.Sprintf(":%s", cfg.Server.Port)
 	log.Printf("🚀 Gateway server starting on port %s", cfg.Server.Port)

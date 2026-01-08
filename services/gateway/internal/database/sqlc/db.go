@@ -1,0 +1,247 @@
+package db
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+// DBTX represents a database transaction or connection
+type DBTX interface {
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+}
+
+// Queries provides methods to interact with the database
+type Queries struct {
+	db DBTX
+}
+
+// New creates a new Queries instance
+func New(db DBTX) *Queries {
+	return &Queries{db: db}
+}
+
+// --- User Queries Implementation ---
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (Users, error) {
+	query := `SELECT id, username, email, password, created_at, updated_at 
+              FROM users WHERE username = $1`
+
+	row := q.db.QueryRow(ctx, query, username)
+	var user Users
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Users{}, fmt.Errorf("user not found")
+		}
+		return Users{}, err
+	}
+	return user, nil
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (Users, error) {
+	query := `SELECT id, username, email, password, created_at, updated_at 
+              FROM users WHERE id = $1`
+
+	row := q.db.QueryRow(ctx, query, id)
+	var user Users
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Users{}, fmt.Errorf("user not found")
+		}
+		return Users{}, err
+	}
+	return user, nil
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (Users, error) {
+	query := `INSERT INTO users (username, email, password, created_at, updated_at) 
+              VALUES ($1, $2, $3, $4, $5) 
+              RETURNING id, username, email, password, created_at, updated_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.Username, arg.Email, arg.Password, now, now)
+	var user Users
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	return user, err
+}
+
+// --- Account Queries Implementation ---
+
+func (q *Queries) GetAccountsByUserID(ctx context.Context, userID int32) ([]Accounts, error) {
+	query := `SELECT id, user_id, currency, balance, created_at, updated_at 
+              FROM accounts WHERE user_id = $1`
+
+	rows, err := q.db.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accounts []Accounts
+	for rows.Next() {
+		var account Accounts
+		if err := rows.Scan(
+			&account.ID,
+			&account.UserID,
+			&account.Currency,
+			&account.Balance,
+			&account.CreatedAt,
+			&account.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, account)
+	}
+	return accounts, rows.Err()
+}
+
+func (q *Queries) GetAccountByUserAndType(ctx context.Context, arg GetAccountByUserAndTypeParams) (Accounts, error) {
+	query := `SELECT id, user_id, currency, balance, created_at, updated_at 
+              FROM accounts WHERE user_id = $1 AND currency = $2`
+
+	row := q.db.QueryRow(ctx, query, arg.UserID, arg.Currency)
+	var account Accounts
+	err := row.Scan(
+		&account.ID,
+		&account.UserID,
+		&account.Currency,
+		&account.Balance,
+		&account.CreatedAt,
+		&account.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Accounts{}, fmt.Errorf("account not found")
+		}
+		return Accounts{}, err
+	}
+	return account, nil
+}
+
+func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (Accounts, error) {
+	query := `INSERT INTO accounts (user_id, currency, balance, created_at, updated_at) 
+              VALUES ($1, $2, $3, $4, $5) 
+              RETURNING id, user_id, currency, balance, created_at, updated_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.UserID, arg.Currency, arg.Balance, now, now)
+	var account Accounts
+	err := row.Scan(
+		&account.ID,
+		&account.UserID,
+		&account.Currency,
+		&account.Balance,
+		&account.CreatedAt,
+		&account.UpdatedAt,
+	)
+	return account, err
+}
+
+func (q *Queries) UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Accounts, error) {
+	// Sử dụng SQL để cộng dồn số dư (atomic operation)
+	query := `UPDATE accounts 
+              SET balance = (balance::numeric + $2::numeric)::text, 
+                  updated_at = $3 
+              WHERE id = $1 
+              RETURNING id, user_id, currency, balance, created_at, updated_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.ID, arg.Amount, now)
+	var account Accounts
+	err := row.Scan(
+		&account.ID,
+		&account.UserID,
+		&account.Currency,
+		&account.Balance,
+		&account.CreatedAt,
+		&account.UpdatedAt,
+	)
+	return account, err
+}
+
+// --- Transaction Queries Implementation ---
+
+func (q *Queries) CreateDeposit(ctx context.Context, arg CreateDepositParams) (Transactions, error) {
+	query := `INSERT INTO transactions (account_id, type, amount, status, created_at, updated_at) 
+              VALUES ($1, 'deposit', $2, 'completed', $3, $4) 
+              RETURNING id, account_id, type, amount, status, created_at, updated_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.AccountID, arg.Amount, now, now)
+	var transaction Transactions
+	err := row.Scan(
+		&transaction.ID,
+		&transaction.AccountID,
+		&transaction.Type,
+		&transaction.Amount,
+		&transaction.Status,
+		&transaction.CreatedAt,
+		&transaction.UpdatedAt,
+	)
+	return transaction, err
+}
+
+func (q *Queries) GetTransactionsByAccountID(ctx context.Context, accountID int64) ([]Transactions, error) {
+	query := `SELECT id, account_id, type, amount, status, created_at, updated_at 
+              FROM transactions WHERE account_id = $1 ORDER BY created_at DESC`
+
+	rows, err := q.db.Query(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []Transactions
+	for rows.Next() {
+		var transaction Transactions
+		if err := rows.Scan(
+			&transaction.ID,
+			&transaction.AccountID,
+			&transaction.Type,
+			&transaction.Amount,
+			&transaction.Status,
+			&transaction.CreatedAt,
+			&transaction.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, transaction)
+	}
+	return transactions, rows.Err()
+}
+
+// WithTx creates a new Queries instance using a transaction
+func (q *Queries) WithTx(tx pgx.Tx) *Queries {
+	return &Queries{
+		db: tx,
+	}
+}
