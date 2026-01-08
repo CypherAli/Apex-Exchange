@@ -35,6 +35,28 @@ type Transactions struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Orders represents a trading order
+type Orders struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Symbol    string    `json:"symbol"`
+	Price     string    `json:"price"`
+	Amount    string    `json:"amount"`
+	Side      string    `json:"side"`   // "Bid" or "Ask"
+	Status    string    `json:"status"` // "pending", "open", "filled", "cancelled"
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Trades represents a matched trade
+type Trades struct {
+	ID           int64     `json:"id"`
+	MakerOrderID int64     `json:"maker_order_id"`
+	TakerOrderID int64     `json:"taker_order_id"`
+	Price        string    `json:"price"`
+	Amount       string    `json:"amount"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // --- Parameter Types for Queries ---
 
 // CreateUserParams contains the parameters for creating a user
@@ -67,6 +89,30 @@ type UpdateAccountBalanceParams struct {
 type CreateDepositParams struct {
 	AccountID int64
 	Amount    string
+}
+
+// CreateOrderParams contains the parameters for creating an order
+type CreateOrderParams struct {
+	ID     int64
+	UserID int64
+	Symbol string
+	Price  string
+	Amount string
+	Side   string
+}
+
+// UpdateOrderStatusParams contains the parameters for updating order status
+type UpdateOrderStatusParams struct {
+	ID     int64
+	Status string
+}
+
+// CreateTradeParams contains the parameters for creating a trade
+type CreateTradeParams struct {
+	MakerOrderID int64
+	TakerOrderID int64
+	Price        string
+	Amount       string
 }
 
 // DepositTxParams contains input parameters for deposit transaction
