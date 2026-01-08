@@ -1,5 +1,5 @@
 // src/orderbook.rs
-use crate::models::{Order, Side};
+use crate::models::{Order, Side, Trade};
 use rust_decimal::Decimal;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
@@ -84,5 +84,93 @@ impl OrderBook {
         
         println!(" -> Không tìm thấy lệnh ID: {} để hủy", order_id);
         false
+    }
+
+    // MỚI: Xử lý lệnh với matching logic
+    pub fn process_order(&mut self, mut order: Order) -> Vec<Trade> {
+        let mut trades = Vec::new();
+        let mut trade_counter = 1u64;
+
+        // Lấy danh sách lệnh đối nghịch (opposite side)
+        let opposite_side = match order.side {
+            Side::Bid => &mut self.asks,  // Lệnh mua -> tìm lệnh bán
+            Side::Ask => &mut self.bids,  // Lệnh bán -> tìm lệnh mua
+        };
+
+        // Duyệt qua các mức giá tốt nhất (BTreeMap tự sắp xếp)
+        let prices_to_check: Vec<Decimal> = opposite_side.keys().copied().collect();
+        
+        for price in prices_to_check {
+            // Kiểm tra điều kiện khớp lệnh
+            let can_match = match order.side {
+                Side::Bid => order.price >= price,  // Mua: giá đặt >= giá bán
+                Side::Ask => order.price <= price,  // Bán: giá đặt <= giá mua
+            };
+
+            if !can_match {
+                break; // Không còn lệnh nào khớp được nữa
+            }
+
+            if let Some(queue) = opposite_side.get_mut(&price) {
+                // Xử lý các lệnh trong queue ở mức giá này
+                while let Some(mut opposite_order) = queue.pop_front() {
+                    // Tính số lượng khớp
+                    let match_amount = order.amount.min(opposite_order.amount);
+                    
+                    // Tạo Trade
+                    let (buyer_id, seller_id) = match order.side {
+                        Side::Bid => (order.id, opposite_order.id),
+                        Side::Ask => (opposite_order.id, order.id),
+                    };
+
+                    let trade = Trade {
+                        trade_id: trade_counter,
+                        buyer_order_id: buyer_id,
+                        seller_order_id: seller_id,
+                        price,
+                        amount: match_amount,
+                        timestamp: 0,
+                    };
+                    
+                    trades.push(trade);
+                    trade_counter += 1;
+
+                    // Cập nhật số lượng còn lại
+                    order.amount -= match_amount;
+                    opposite_order.amount -= match_amount;
+
+                    // Nếu lệnh đối nghịch còn thừa, đưa lại vào queue
+                    if opposite_order.amount > Decimal::ZERO {
+                        queue.push_front(opposite_order);
+                        break; // Lệnh hiện tại đã khớp hết
+                    } else {
+                        // Lệnh đối nghịch đã khớp hết -> xóa khỏi index
+                        self.order_locations.remove(&opposite_order.id);
+                    }
+
+                    // Nếu lệnh hiện tại đã khớp hết
+                    if order.amount == Decimal::ZERO {
+                        break;
+                    }
+                }
+
+                // Xóa mức giá nếu queue rỗng
+                if queue.is_empty() {
+                    opposite_side.remove(&price);
+                }
+            }
+
+            // Nếu lệnh đã khớp hết, dừng
+            if order.amount == Decimal::ZERO {
+                break;
+            }
+        }
+
+        // Nếu còn số lượng chưa khớp -> thêm vào OrderBook
+        if order.amount > Decimal::ZERO {
+            self.add_limit_order(order);
+        }
+
+        trades
     }
 }

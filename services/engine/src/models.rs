@@ -33,3 +33,31 @@ impl Order {
         }
     }
 }
+
+// Trade: Kết quả của một giao dịch được khớp
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Trade {
+    pub trade_id: u64,         // ID duy nhất của trade
+    pub buyer_order_id: u64,   // ID lệnh mua
+    pub seller_order_id: u64,  // ID lệnh bán
+    pub price: Decimal,        // Giá khớp
+    pub amount: Decimal,       // Số lượng khớp
+    pub timestamp: u64,        // Thời điểm khớp
+}
+
+// Input: Các lệnh mà Engine có thể hiểu
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "type", content = "data")] // Giúp JSON đẹp hơn: {"type": "place", "data": {...}}
+pub enum Command {
+    Place(Order),
+    Cancel(u64), // Chỉ cần ID để hủy
+}
+
+// Output: Kết quả Engine trả ra
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum EngineEvent {
+    OrderPlaced { order_id: u64, symbol: String },
+    OrderCancelled { order_id: u64, success: bool },
+    TradeExecuted { trade: Trade },
+}

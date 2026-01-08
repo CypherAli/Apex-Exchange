@@ -1,41 +1,39 @@
 mod models;
 mod orderbook;
+mod engine; // Nhớ khai báo module mới
 
 #[cfg(test)]
 mod tests;
 
-use models::{Order, Side};
-use orderbook::OrderBook;
+use models::{Command, Order, Side};
+use engine::MatchingEngine;
 use rust_decimal_macros::dec; // Macro để viết số thập phân nhanh
 
 fn main() {
-    println!("🔥 Trading Engine is starting...");
+    println!("🚀 Starting Matching Engine v1.0...");
+    
+    let mut engine = MatchingEngine::new();
 
-    let mut book = OrderBook::new();
+    // Giả lập một chuỗi các lệnh gửi đến Engine (thay vì nhập tay)
+    let commands = vec![
+        // 1. Đặt lệnh Bán BTC (Tạo thanh khoản)
+        Command::Place(Order::new(1, 101, dec!(50000), dec!(1.0), Side::Ask)),
+        
+        // 2. Đặt lệnh Mua BTC (Khớp ngay)
+        Command::Place(Order::new(2, 102, dec!(50000), dec!(0.5), Side::Bid)),
+        
+        // 3. Hủy lệnh (Thử hủy lệnh ID 1 đã bị khớp 1 phần)
+        Command::Cancel(1),
+    ];
 
-    // Giả lập 1 lệnh Mua BTC giá 50,000
-    let buy_order = Order::new(
-        1, 
-        101, 
-        dec!(50000.0), 
-        dec!(0.1), 
-        Side::Bid
-    );
-
-    // Giả lập 1 lệnh Bán BTC giá 51,000
-    let sell_order = Order::new(
-        2, 
-        102, 
-        dec!(51000.0), 
-        dec!(0.5), 
-        Side::Ask
-    );
-
-    println!("Nhận lệnh Mua: {:?}", buy_order);
-    book.add_limit_order(buy_order);
-
-    println!("Nhận lệnh Bán: {:?}", sell_order);
-    book.add_limit_order(sell_order);
-
-    println!("Current Book: {:?}", book);
+    // Vòng lặp xử lý (Event Loop)
+    for cmd in commands {
+        println!("\n📥 Input Command: {:?}", cmd);
+        
+        let events = engine.process_command(cmd);
+        
+        for event in events {
+            println!("   📤 Output Event: {:?}", event);
+        }
+    }
 }
