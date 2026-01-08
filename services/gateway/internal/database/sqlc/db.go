@@ -52,6 +52,29 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (Users
 	return user, nil
 }
 
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (Users, error) {
+	query := `SELECT id, username, email, password, created_at, updated_at 
+              FROM users WHERE email = $1`
+
+	row := q.db.QueryRow(ctx, query, email)
+	var user Users
+	err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Users{}, fmt.Errorf("user not found")
+		}
+		return Users{}, err
+	}
+	return user, nil
+}
+
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (Users, error) {
 	query := `SELECT id, username, email, password, created_at, updated_at 
               FROM users WHERE id = $1`

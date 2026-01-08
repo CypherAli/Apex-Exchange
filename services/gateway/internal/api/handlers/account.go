@@ -72,7 +72,7 @@ func (h *AccountHandler) AddDeposit(ctx *gin.Context) {
 
 	// 2. Gọi Transaction để nạp tiền
 	arg := db.DepositTxParams{
-		UserID:   user.ID,
+		UserID:   int32(user.ID), // Cast int64 to int32
 		Amount:   req.Amount,
 		Currency: req.Currency,
 	}
