@@ -72,15 +72,15 @@ type CreateDepositParams struct {
 
 // DepositTxParams contains input parameters for deposit transaction
 type DepositTxParams struct {
-	UserID   int32
-	Amount   string
-	Currency string
+	UserID   int64  `json:"user_id"`
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
 }
 
 // DepositTxResult contains the result of deposit transaction
 type DepositTxResult struct {
-	Account     Accounts
-	Transaction Transactions
+	Account     Accounts     `json:"account"`
+	Transaction Transactions `json:"transaction"`
 }
 
 // --- Querier Interface ---
@@ -90,11 +90,11 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
 	GetUserByUsername(ctx context.Context, username string) (Users, error)
 	GetUserByEmail(ctx context.Context, email string) (Users, error)
-	
+
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Accounts, error)
 	GetAccountByUserAndType(ctx context.Context, arg GetAccountByUserAndTypeParams) (Accounts, error)
 	GetAccountsByUserID(ctx context.Context, userID int32) ([]Accounts, error)
 	UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Accounts, error)
-	
+
 	CreateDeposit(ctx context.Context, arg CreateDepositParams) (Transactions, error)
 }
