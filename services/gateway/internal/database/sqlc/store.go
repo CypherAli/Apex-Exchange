@@ -50,19 +50,6 @@ func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) erro
 
 // --- Logic Nghiệp vụ: Nạp tiền (Transaction) ---
 
-// DepositTxParams chứa tham số cho transaction nạp tiền
-type DepositTxParams struct {
-	UserID   int64  `json:"user_id"`
-	Amount   string `json:"amount"` // Dùng string để tránh lỗi làm tròn float
-	Currency string `json:"currency"`
-}
-
-// DepositTxResult chứa kết quả của transaction nạp tiền
-type DepositTxResult struct {
-	Transaction Transactions `json:"transaction"`
-	Account     Accounts     `json:"account"`
-}
-
 // DepositTx thực hiện quy trình nạp tiền an toàn
 // Đảm bảo tính nguyên tử: Hoặc là cả hai thao tác thành công, hoặc không có gì thay đổi
 func (store *SQLStore) DepositTx(ctx context.Context, arg DepositTxParams) (DepositTxResult, error) {
