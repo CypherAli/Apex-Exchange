@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"time"
 )
 
@@ -33,4 +34,67 @@ type Transactions struct {
 	Status    string    `json:"status"` // "pending", "completed", "failed"
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// --- Parameter Types for Queries ---
+
+// CreateUserParams contains the parameters for creating a user
+type CreateUserParams struct {
+	Username string
+	Email    string
+	Password string
+}
+
+// GetAccountByUserAndTypeParams contains the parameters for getting an account by user and currency
+type GetAccountByUserAndTypeParams struct {
+	UserID   int32
+	Currency string
+}
+
+// CreateAccountParams contains the parameters for creating an account
+type CreateAccountParams struct {
+	UserID   int32
+	Currency string
+	Balance  string
+}
+
+// UpdateAccountBalanceParams contains the parameters for updating an account balance
+type UpdateAccountBalanceParams struct {
+	ID     int64
+	Amount string
+}
+
+// CreateDepositParams contains the parameters for creating a deposit transaction
+type CreateDepositParams struct {
+	AccountID int64
+	Amount    string
+}
+
+// DepositTxParams contains input parameters for deposit transaction
+type DepositTxParams struct {
+	UserID   int32
+	Amount   string
+	Currency string
+}
+
+// DepositTxResult contains the result of deposit transaction
+type DepositTxResult struct {
+	Account     Accounts
+	Transaction Transactions
+}
+
+// --- Querier Interface ---
+
+// Querier contains all database query methods
+type Querier interface {
+	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
+	GetUserByUsername(ctx context.Context, username string) (Users, error)
+	GetUserByEmail(ctx context.Context, email string) (Users, error)
+	
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Accounts, error)
+	GetAccountByUserAndType(ctx context.Context, arg GetAccountByUserAndTypeParams) (Accounts, error)
+	GetAccountsByUserID(ctx context.Context, userID int32) ([]Accounts, error)
+	UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Accounts, error)
+	
+	CreateDeposit(ctx context.Context, arg CreateDepositParams) (Transactions, error)
 }
