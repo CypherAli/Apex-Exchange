@@ -37,10 +37,14 @@ impl MatchingEngine {
         // 3. Tạo danh sách sự kiện trả về
         let mut events = Vec::new();
 
-        // Sự kiện xác nhận đã đặt lệnh
+        // Sự kiện xác nhận đã đặt lệnh - GỬI ĐẦY ĐỦ THÔNG TIN
         events.push(EngineEvent::OrderPlaced { 
-            order_id: order.id, 
-            symbol 
+            order_id: order.id,
+            user_id: order.user_id,
+            symbol,
+            price: order.price,
+            amount: order.amount,
+            side: order.side,
         });
 
         // Sự kiện cho từng trade được khớp

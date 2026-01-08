@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/trading-platform/gateway/internal/api"
 	"github.com/trading-platform/gateway/internal/config"
 	db "github.com/trading-platform/gateway/internal/database/sqlc"
+	"github.com/trading-platform/gateway/internal/worker"
 )
 
 func main() {
@@ -51,11 +55,34 @@ func main() {
 	defer nc.Close()
 	log.Println("✅ NATS connected successfully")
 
+	// Khởi động Event Processor (Worker) trong goroutine riêng
+	log.Println("🔧 Starting Event Processor Worker...")
+	processor := worker.NewEventProcessor(store, nc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := processor.Start(ctx); err != nil {
+			log.Fatalf("Event processor error: %v", err)
+		}
+	}()
+
 	// Create and start server
 	server := api.NewServer(*cfg, store, nc)
 
 	address := fmt.Sprintf(":%s", cfg.Server.Port)
 	log.Printf("🚀 Gateway server starting on port %s", cfg.Server.Port)
+
+	// Graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		log.Println("🛑 Shutting down gracefully...")
+		cancel() // Cancel context to stop worker
+	}()
 
 	if err := server.Start(address); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

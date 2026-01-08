@@ -24,16 +24,23 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (Users, error)
 	GetUserByEmail(ctx context.Context, email string) (Users, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
-	
+
 	// Account methods
 	GetAccountsByUserID(ctx context.Context, userID int32) ([]Accounts, error)
 	GetAccountByUserAndType(ctx context.Context, arg GetAccountByUserAndTypeParams) (Accounts, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Accounts, error)
 	UpdateAccountBalance(ctx context.Context, arg UpdateAccountBalanceParams) (Accounts, error)
-	
+
 	// Transaction methods
 	CreateDeposit(ctx context.Context, arg CreateDepositParams) (Transactions, error)
 	GetTransactionsByAccountID(ctx context.Context, accountID int64) ([]Transactions, error)
+
+	// Order methods
+	CreateOrder(ctx context.Context, arg CreateOrderParams) (Orders, error)
+	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Orders, error)
+
+	// Trade methods
+	CreateTrade(ctx context.Context, arg CreateTradeParams) (Trades, error)
 }
 
 // Queries provides methods to interact with the database
@@ -286,4 +293,69 @@ func (q *Queries) WithTx(tx pgx.Tx) *Queries {
 	return &Queries{
 		db: tx,
 	}
+}
+
+// --- Order Queries Implementation ---
+
+func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Orders, error) {
+	query := `INSERT INTO engine_orders (id, user_id, symbol, price, amount, side, status, created_at) 
+              VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7) 
+              RETURNING id, user_id, symbol, price, amount, side, status, created_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.ID, arg.UserID, arg.Symbol, arg.Price, arg.Amount, arg.Side, now)
+	var order Orders
+	err := row.Scan(
+		&order.ID,
+		&order.UserID,
+		&order.Symbol,
+		&order.Price,
+		&order.Amount,
+		&order.Side,
+		&order.Status,
+		&order.CreatedAt,
+	)
+	return order, err
+}
+
+func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Orders, error) {
+	query := `UPDATE engine_orders 
+              SET status = $2 
+              WHERE id = $1 
+              RETURNING id, user_id, symbol, price, amount, side, status, created_at`
+
+	row := q.db.QueryRow(ctx, query, arg.ID, arg.Status)
+	var order Orders
+	err := row.Scan(
+		&order.ID,
+		&order.UserID,
+		&order.Symbol,
+		&order.Price,
+		&order.Amount,
+		&order.Side,
+		&order.Status,
+		&order.CreatedAt,
+	)
+	return order, err
+}
+
+// --- Trade Queries Implementation ---
+
+func (q *Queries) CreateTrade(ctx context.Context, arg CreateTradeParams) (Trades, error) {
+	query := `INSERT INTO engine_trades (maker_order_id, taker_order_id, price, amount, created_at) 
+              VALUES ($1, $2, $3, $4, $5) 
+              RETURNING id, maker_order_id, taker_order_id, price, amount, created_at`
+
+	now := time.Now()
+	row := q.db.QueryRow(ctx, query, arg.MakerOrderID, arg.TakerOrderID, arg.Price, arg.Amount, now)
+	var trade Trades
+	err := row.Scan(
+		&trade.ID,
+		&trade.MakerOrderID,
+		&trade.TakerOrderID,
+		&trade.Price,
+		&trade.Amount,
+		&trade.CreatedAt,
+	)
+	return trade, err
 }

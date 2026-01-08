@@ -57,7 +57,14 @@ pub enum Command {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum EngineEvent {
-    OrderPlaced { order_id: u64, symbol: String },
+    OrderPlaced { 
+        order_id: u64,
+        user_id: u64,
+        symbol: String,
+        price: Decimal,
+        amount: Decimal,
+        side: Side,
+    },
     OrderCancelled { order_id: u64, success: bool },
     TradeExecuted { trade: Trade },
 }
