@@ -16,15 +16,22 @@ export default function OrderForm() {
   const [amount, setAmount] = useState("");
   const [triggerPrice, setTriggerPrice] = useState(""); // MỚI: Giá kích hoạt cho Stop-Limit
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [balance, setBalance] = useState<{ usdt: string; btc: string }>({
     usdt: "0",
     btc: "0",
   });
 
+  // Set mounted state to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Fetch balance when component loads or token changes
   useEffect(() => {
+    if (!mounted || !token) return;
+    
     const fetchBalance = async () => {
-      if (!token) return;
       try {
         const res = await fetch("http://localhost:8080/api/v1/balance", {
           headers: { Authorization: `Bearer ${token}` },
@@ -47,7 +54,7 @@ export default function OrderForm() {
     // Refresh balance every 10 seconds
     const interval = setInterval(fetchBalance, 10000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, mounted]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,9 +84,9 @@ export default function OrderForm() {
           symbol: "BTC/USDT",
           side: side,
           type: orderType,
-          price: orderType === "Market" ? "0" : price,
-          amount: amount,
-          trigger_price: orderType === "StopLimit" ? triggerPrice : "0" // MỚI: Gửi trigger_price
+          price: orderType === "Market" ? 0 : parseFloat(price) || 0,
+          amount: parseFloat(amount) || 0,
+          trigger_price: orderType === "StopLimit" ? parseFloat(triggerPrice) || 0 : 0
         })
       });
       
@@ -176,7 +183,7 @@ export default function OrderForm() {
               {orderType === "StopLimit" ? "Limit Price (USDT)" : "Price (USDT)"}
               {orderType === "StopLimit" && <span className="text-yellow-500 ml-1">*</span>}
             </span>
-            {token && (
+            {mounted && token && (
               <span className="text-gray-400">
                 Avail: <span className="text-white font-mono">{parseFloat(balance.usdt).toFixed(2)}</span>
               </span>
@@ -209,7 +216,7 @@ export default function OrderForm() {
         <div>
           <label className="text-xs text-gray-500 mb-1 flex justify-between">
             <span>Amount (BTC)</span>
-            {token && (
+            {mounted && token && (
               <span className="text-gray-400">
                 Avail: <span className="text-white font-mono">{parseFloat(balance.btc).toFixed(4)}</span>
               </span>
@@ -239,7 +246,7 @@ export default function OrderForm() {
 
         {/* Nút Submit */}
         <button 
-          disabled={loading || !token}
+          disabled={loading || (mounted && !token)}
           type="submit"
           className={`w-full py-3 rounded font-bold text-lg mt-4 transition-colors ${
             side === "Bid" 
@@ -247,11 +254,11 @@ export default function OrderForm() {
               : "bg-red-500 hover:bg-red-600 text-white"
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          {!token ? "Login Required" : loading ? "Processing..." : side === "Bid" ? "Buy BTC" : "Sell BTC"}
+          {!mounted ? "Loading..." : !token ? "Login Required" : loading ? "Processing..." : side === "Bid" ? "Buy BTC" : "Sell BTC"}
         </button>
       </form>
 
-      {!token && (
+      {mounted && !token && (
         <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700/30 rounded text-xs text-yellow-500">
           <strong>⚠️ Not logged in:</strong> Please <a href="/login" className="underline font-bold">login</a> to place orders
         </div>
