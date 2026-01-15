@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
@@ -8,6 +9,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +30,8 @@ export default function LoginPage() {
 
       const data = await res.json();
       // Lưu token và chuyển hướng
-      login(data.access_token); 
+      login(data.access_token);
+      router.push('/'); // Redirect to home 
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Invalid email or password";
       setError(errorMessage);
@@ -40,6 +43,14 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0b0e11] text-white">
       <div className="bg-[#1e2026] p-8 rounded-lg shadow-lg w-96 border border-gray-800">
+        {/* Back to Home Button */}
+        <button
+          onClick={() => router.push('/')}
+          className="mb-4 text-gray-400 hover:text-yellow-500 text-sm flex items-center gap-2 transition"
+        >
+          <span>←</span> Back to Home
+        </button>
+
         <h1 className="text-2xl font-bold mb-6 text-center text-yellow-500">
           Login to Binance Clone
         </h1>
@@ -83,10 +94,11 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center text-xs text-gray-500">
-          <p>Demo credentials:</p>
-          <p className="mt-1 font-mono bg-gray-900 p-2 rounded">
-            Run quick-seed.ps1 to create a user
-          </p>
+          <p className="font-semibold mb-2">🔑 Test Account:</p>
+          <div className="bg-[#2b3139] p-3 rounded border border-gray-700">
+            <p className="font-mono text-white">Username: <span className="text-yellow-400">trader1</span></p>
+            <p className="font-mono text-white">Password: <span className="text-yellow-400">Pass1234</span></p>
+          </div>
         </div>
       </div>
     </div>

@@ -3,7 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,19 +50,45 @@ func (h *OrderHandler) PlaceOrder(ctx *gin.Context) {
 		amount = req.Quantity
 	}
 
-	// Chuẩn hóa side: buy/sell -> Bid/Ask
-	side := req.Side
-	switch side {
-	case "buy":
-		side = "Bid"
-	case "sell":
-		side = "Ask"
+	// Chuẩn hóa side: buy/sell/Bid/Ask -> BUY/SELL (cho database) và Bid/Ask (cho engine)
+	sideDB := ""        // Side cho database
+	sideEngine := ""    // Side cho engine
+	
+	switch req.Side {
+	case "buy", "Buy", "BUY":
+		sideDB = "BUY"
+		sideEngine = "Bid"
+	case "sell", "Sell", "SELL":
+		sideDB = "SELL"
+		sideEngine = "Ask"
+	case "Bid", "bid":
+		sideDB = "BUY"
+		sideEngine = "Bid"
+	case "Ask", "ask":
+		sideDB = "SELL"
+		sideEngine = "Ask"
+	default:
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid side: %s (expected: buy, sell, Bid, or Ask)", req.Side)})
+		return
 	}
 
 	// Chuẩn hóa type: Mặc định là Limit nếu không có
 	orderType := req.Type
 	if orderType == "" {
 		orderType = "Limit"
+	}
+	
+	// Uppercase orderType cho database
+	orderTypeDB := ""
+	switch orderType {
+	case "Limit", "limit":
+		orderTypeDB = "LIMIT"
+	case "Market", "market":
+		orderTypeDB = "MARKET"
+	case "StopLimit", "stop_limit":
+		orderTypeDB = "LIMIT" // StopLimit lưu như LIMIT
+	default:
+		orderTypeDB = "LIMIT"
 	}
 
 	// Validate: Market Order không cần price, Limit Order bắt buộc có price
@@ -86,56 +114,85 @@ func (h *OrderHandler) PlaceOrder(ctx *gin.Context) {
 		// (Tạm thời skip validation này, engine sẽ xử lý)
 	}
 
-	// 1. Lấy UserID từ Token (tạm thời chưa dùng, sẽ dùng sau)
-	_ = ctx.MustGet("authorization_payload").(*util.Payload)
-	// Tạm thời giả định UserID = 1 (sau này query DB để lấy ID thật)
-	userID := uint64(1)
+	// 1. Lấy UserID từ Token và get user từ database
+	payload := ctx.MustGet("authorization_payload").(*util.Payload)
+	user, err := h.store.GetUserByUsername(ctx, payload.Username)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+		return
+	}
 
-	// 2. Tạo Order ID (Tạm thời dùng timestamp, sau này dùng Snowflake ID hoặc Sequence DB)
+	// 2. Insert order vào database với UUID (dùng sideDB và orderTypeDB uppercase)
+	orderIDStr, err := h.store.InsertOrderWithUUID(ctx, user.ID, req.Symbol, sideDB, orderTypeDB, req.Price, amount)
+	if err != nil {
+		log.Printf("❌ Failed to insert order: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save order"})
+		return
+	}
+
+	log.Printf("✅ Order saved to database: ID=%s", orderIDStr)
+
+	// 3. Generate numeric order ID for engine
 	orderID := uint64(time.Now().UnixNano())
 
-	// 3. Chuẩn bị trigger_price (chỉ có với StopLimit)
+	// 4. Chuẩn bị trigger_price (chỉ có với StopLimit)
 	triggerPrice := ""
 	if orderType == "StopLimit" {
 		triggerPrice = fmt.Sprintf("%.8f", req.TriggerPrice)
 	}
 
-	// 4. Tạo Command chuẩn format Rust (chuyển số về string)
+	// Parse user.ID to uint64 for engine
+	userIDInt := uint64(1) // Default fallback
+	if id, err := strconv.ParseUint(user.ID[:8], 16, 64); err == nil {
+		userIDInt = id
+	}
+
+	// 5. Tạo Command chuẩn format Rust (chuyển số về string) - dùng sideEngine
 	cmd := models.Command{
 		Type: "Place",
 		Data: models.OrderData{
 			ID:           orderID,
-			UserID:       userID,
+			UserID:       userIDInt,
 			Symbol:       req.Symbol,
 			Price:        fmt.Sprintf("%.8f", req.Price),
 			Amount:       fmt.Sprintf("%.8f", amount),
-			Side:         side,
+			Side:         sideEngine, // Dùng sideEngine cho NATS
 			Type:         orderType,
-			TriggerPrice: triggerPrice, // Thêm trigger_price
+			TriggerPrice: triggerPrice,
 			Timestamp:    time.Now().Unix(),
 		},
 	}
 
-	// 5. Serialize sang JSON
+	// 6. Serialize sang JSON
 	data, err := json.Marshal(cmd)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal command"})
 		return
 	}
 
-	// 6. Bắn vào NATS topic "orders"
+	// 7. Bắn vào NATS topic "orders"
 	err = h.natsConn.Publish("orders", data)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to NATS"})
-		return
+		// Nếu NATS fail, log nhưng vẫn trả về success vì order đã lưu database
+		log.Printf("⚠️ Failed to publish to NATS: %v", err)
 	}
 
+	// 8. Trả về thành công
 	ctx.JSON(http.StatusOK, gin.H{
-		"message":  "Order placed successfully",
-		"order_id": orderID,
+		"message":      "Order placed successfully",
+		"order_id":     orderID,
+		"order_id_db":  orderIDStr,
+		"order": gin.H{
+			"id":     orderIDStr,
+			"symbol": req.Symbol,
+			"side":   sideDB,
+			"price":  req.Price,
+			"amount": amount,
+			"type":   orderTypeDB,
+			"status": "OPEN",
+		},
 	})
 }
-
 // cancelOrderRequest defines the request structure for canceling an order
 type cancelOrderRequest struct {
 	OrderID uint64 `json:"order_id" binding:"required"`
@@ -153,12 +210,20 @@ func (h *OrderHandler) ListOpenOrders(ctx *gin.Context) {
 		return
 	}
 
-	orders, err := h.store.ListPendingOrders(ctx, util.HashStringToInt64(user.ID))
+	// Query orders với UUID
+	orders, err := h.store.ListOrdersWithUUID(ctx, user.ID)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Failed to list orders: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query orders"})
 		return
 	}
 
+	// Ensure we always return an array, not null
+	if orders == nil {
+		orders = []map[string]interface{}{}
+	}
+
+	log.Printf("✅ Found %d orders for user %s", len(orders), user.Username)
 	ctx.JSON(http.StatusOK, orders)
 }
 

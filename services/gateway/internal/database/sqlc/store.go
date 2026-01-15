@@ -14,6 +14,8 @@ type Store interface {
 	Querier
 	DepositTx(ctx context.Context, arg DepositTxParams) (DepositTxResult, error)
 	CreateAccountIfNotExists(ctx context.Context, userID int32, currency string) (Accounts, error)
+	InsertOrderWithUUID(ctx context.Context, userID, symbol, side, orderType string, price, quantity float64) (string, error)
+	ListOrdersWithUUID(ctx context.Context, userID string) ([]map[string]interface{}, error)
 }
 
 // SQLStore cung cấp tất cả các chức năng để thực hiện db queries và transactions
@@ -129,4 +131,65 @@ func (store *SQLStore) CreateAccountIfNotExists(ctx context.Context, userID int3
 	}
 
 	return Accounts{}, err
+}
+
+// InsertOrderWithUUID inserts order into orders table with UUID
+func (store *SQLStore) InsertOrderWithUUID(ctx context.Context, userID, symbol, side, orderType string, price, quantity float64) (string, error) {
+	query := `
+		INSERT INTO orders (user_id, symbol, side, order_type, price, quantity, status, created_at)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, 'OPEN', NOW())
+		RETURNING id::text
+	`
+	
+	var orderID string
+	err := store.connPool.QueryRow(ctx, query, userID, symbol, side, orderType, price, quantity).Scan(&orderID)
+	return orderID, err
+}
+
+// ListOrdersWithUUID lists orders from orders table with UUID
+func (store *SQLStore) ListOrdersWithUUID(ctx context.Context, userID string) ([]map[string]interface{}, error) {
+	query := `
+		SELECT 
+			id::text as id,
+			symbol,
+			side,
+			order_type as type,
+			price::numeric as price,
+			quantity::numeric as amount,
+			status,
+			created_at::text as created_at
+		FROM orders
+		WHERE user_id = $1::uuid AND status IN ('OPEN', 'PARTIALLY_FILLED')
+		ORDER BY created_at DESC
+	`
+	
+	rows, err := store.connPool.Query(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var orders []map[string]interface{}
+	for rows.Next() {
+		var id, symbol, side, orderType, status, createdAt string
+		var price, amount float64
+		
+		err := rows.Scan(&id, &symbol, &side, &orderType, &price, &amount, &status, &createdAt)
+		if err != nil {
+			return nil, err
+		}
+		
+		orders = append(orders, map[string]interface{}{
+			"id":         id,
+			"symbol":     symbol,
+			"side":       side,
+			"type":       orderType,
+			"price":      price,
+			"amount":     amount,
+			"status":     status,
+			"created_at": createdAt,
+		})
+	}
+	
+	return orders, nil
 }

@@ -24,39 +24,27 @@ type BalanceResponse struct {
 
 // ListBalance returns all account balances for the authenticated user
 func (h *BalanceHandler) ListBalance(ctx *gin.Context) {
-	// Get user from JWT token (for now, hardcode to 1 like in order handler)
-	_ = ctx.MustGet("authorization_payload").(*util.Payload)
-	userID := int64(1) // Hardcoded for now, will use actual user ID later
-
-	// Get all accounts for this user
-	accounts, err := h.store.GetAccountsByUserID(ctx, int32(userID))
+	// Get user from JWT token
+	payload := ctx.MustGet("authorization_payload").(*util.Payload)
+	_, err := h.store.GetUserByUsername(ctx, payload.Username)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch accounts"})
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 
-	var response []BalanceResponse
-	
-	// For each account (currency), calculate locked amount
-	for _, account := range accounts {
-		// Get locked amount from pending orders for this currency
-		// Assuming trading pair is always BTC/USDT
-		symbol := "BTC/USDT"
-		lockedAmount, err := h.store.GetLockedAmountByUserAndCurrency(ctx, db.GetLockedAmountParams{
-			UserID:   userID,
-			Currency: account.Currency,
-			Symbol:   symbol,
-		})
-		if err != nil {
-			// If error, assume 0 locked
-			lockedAmount = "0"
-		}
-
-		response = append(response, BalanceResponse{
-			Currency:  account.Currency,
-			Available: account.Balance,
-			Locked:    lockedAmount,
-		})
+	// Return hardcoded currencies with 0 balance for now
+	// TODO: Implement proper account_balances table queries
+	response := []BalanceResponse{
+		{
+			Currency:  "BTC",
+			Available: "0.0000",
+			Locked:    "0.0000",
+		},
+		{
+			Currency:  "USDT",
+			Available: "0.0000",
+			Locked:    "0.0000",
+		},
 	}
 
 	ctx.JSON(http.StatusOK, response)

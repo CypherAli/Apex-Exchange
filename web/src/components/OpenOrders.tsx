@@ -15,6 +15,8 @@ export default function OpenOrders() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Hàm fetch dữ liệu
   const fetchOrders = useCallback(async () => {
@@ -27,27 +29,44 @@ export default function OpenOrders() {
       const res = await fetch("http://localhost:8080/api/v1/orders/open", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
+      console.log("📊 Orders API Response Status:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
-        // API có thể trả về null nếu không có lệnh nào
-        setOrders(data || []);
+        console.log("📊 Orders Data:", data);
+        // API có thể trả về null hoặc undefined nếu không có lệnh nào
+        // Đảm bảo luôn set một array
+        const ordersArray = Array.isArray(data) ? data : [];
+        setOrders(ordersArray);
+        setError(null);
+        console.log(`✅ Set ${ordersArray.length} orders`);
       } else {
-        console.error("Failed to fetch orders");
+        const errorText = await res.text();
+        console.error("❌ Failed to fetch orders:", res.status, errorText);
+        setError(`API Error: ${res.status}`);
       }
     } catch (err) {
-      console.error("Error fetching orders:", err);
+      console.error("❌ Error fetching orders:", err);
+      setError(`Network Error: ${err}`);
     } finally {
       setLoading(false);
     }
   }, [token]);
 
+  // Set mounted state to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Fetch khi component load
   useEffect(() => {
+    if (!mounted) return;
     fetchOrders();
     // Set interval 3s fetch 1 lần để cập nhật realtime đơn giản
     const interval = setInterval(fetchOrders, 3000);
     return () => clearInterval(interval);
-  }, [token, fetchOrders]);
+  }, [token, fetchOrders, mounted]);
 
   const handleCancel = async (orderId: number) => {
     if (!confirm("Cancel this order?")) return;
@@ -75,10 +94,21 @@ export default function OpenOrders() {
     }
   };
 
+  // Show loading state during SSR to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="h-full p-4 overflow-auto">
+        <h3 className="text-sm font-bold text-gray-400 mb-4">Open Orders</h3>
+        <div className="text-center text-gray-600 text-sm py-8">Loading...</div>
+      </div>
+    );
+  }
+
   if (!token) {
     return (
-      <div className="h-full p-4 flex items-center justify-center">
-        <div className="text-gray-600 text-sm">
+      <div className="h-full p-4 overflow-auto">
+        <h3 className="text-sm font-bold text-gray-400 mb-4">Open Orders</h3>
+        <div className="text-center text-gray-600 text-sm py-8">
           Please <a href="/login" className="text-yellow-500 underline">login</a> to view your orders
         </div>
       </div>
@@ -87,7 +117,29 @@ export default function OpenOrders() {
 
   return (
     <div className="h-full p-4 overflow-auto">
-      <h3 className="text-sm font-bold text-gray-400 mb-4">Open Orders</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm font-bold text-gray-400">Open Orders</h3>
+        {mounted && token && (
+          <button 
+            onClick={() => fetchOrders()}
+            className="text-xs text-yellow-500 hover:text-yellow-400 border border-yellow-500/30 px-2 py-1 rounded hover:bg-yellow-500/10 transition"
+          >
+            🔄 Refresh
+          </button>
+        )}
+      </div>
+      
+      {error && (
+        <div className="text-center text-red-500 text-sm py-4 bg-red-900/20 rounded mb-2">
+          ⚠️ {error}
+        </div>
+      )}
+      
+      {!loading && !error && orders.length > 0 && (
+        <div className="text-xs text-gray-500 mb-2">
+          Found {orders.length} order(s)
+        </div>
+      )}
       
       {loading ? (
         <div className="text-center text-gray-600 text-sm py-8">Loading...</div>

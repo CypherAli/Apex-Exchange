@@ -3,7 +3,12 @@
 import { useEffect, useRef } from 'react';
 import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
-export default function Chart() {
+interface ChartProps {
+  onToggle?: () => void;
+  collapsed?: boolean;
+}
+
+export default function Chart({ onToggle, collapsed }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
