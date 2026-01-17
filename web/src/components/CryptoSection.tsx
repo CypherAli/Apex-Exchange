@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { fetchCryptoData, fetchCryptoGainers, fetchCryptoLosers } from "@/services/marketDataService";
 
 interface Crypto {
   symbol: string;
@@ -8,36 +9,43 @@ interface Crypto {
   price: string;
   change: string;
   isPositive: boolean;
-  logo: string;
+  logo?: string;
+  marketCap?: string;
 }
-
-const trendingCrypto: Crypto[] = [
-  { symbol: "RIVERUSDT.P", name: "RIVER / TetherUS", price: "23.522", change: "−4.61%", isPositive: false, logo: "🌊" },
-  { symbol: "CHZUSDT", name: "Chiliz / TetherUS", price: "0.05852", change: "+0.65%", isPositive: true, logo: "⚽" },
-  { symbol: "DASHUSDT", name: "Dash / TetherUS", price: "91.22", change: "+12.87%", isPositive: true, logo: "💎" },
-  { symbol: "AXSUSDT", name: "AXS / TetherUS", price: "1.250", change: "+15.10%", isPositive: true, logo: "🎮" },
-  { symbol: "LINKUSD", name: "Chainlink", price: "13.519", change: "−2.00%", isPositive: false, logo: "🔗" },
-  { symbol: "DOGEUSD", name: "Dogecoin", price: "0.13637", change: "−2.59%", isPositive: false, logo: "🐕" },
-  { symbol: "AAVEUSDT", name: "AAVE / TetherUS", price: "169.96", change: "−1.04%", isPositive: false, logo: "👻" },
-  { symbol: "LTCUSD", name: "Litecoin", price: "72.13", change: "−0.10%", isPositive: false, logo: "Ł" },
-];
-
-const cryptoGainers: Crypto[] = [
-  { symbol: "METEUSD", name: "Meteora", price: "0.30732", change: "+20.87%", isPositive: true, logo: "☄️" },
-  { symbol: "AXSUSD", name: "Axie Infinity", price: "1.2507", change: "+14.87%", isPositive: true, logo: "🎮" },
-  { symbol: "DASHUSD", name: "Dash", price: "91.075", change: "+13.38%", isPositive: true, logo: "💎" },
-  { symbol: "ZENUSD", name: "Horizen", price: "13.317", change: "+11.44%", isPositive: true, logo: "🔷" },
-];
-
-const cryptoLosers: Crypto[] = [
-  { symbol: "FOGOUSD", name: "Fogo", price: "0.037950", change: "−28.33%", isPositive: false, logo: "🔥" },
-  { symbol: "AVUUSD", name: "Vaulta", price: "0.14033", change: "−18.81%", isPositive: false, logo: "🏦" },
-  { symbol: "BARDLUSD", name: "Lombard", price: "0.76273", change: "−12.82%", isPositive: false, logo: "🏰" },
-  { symbol: "CHEEMSCUSD", name: "Cheems", price: "0.00000091", change: "−9.98%", isPositive: false, logo: "🐶" },
-];
 
 export default function CryptoSection() {
   const [activeTab, setActiveTab] = useState<"trends" | "gainers" | "losers">("trends");
+  const [trendingCrypto, setTrendingCrypto] = useState<Crypto[]>([]);
+  const [cryptoGainers, setCryptoGainers] = useState<Crypto[]>([]);
+  const [cryptoLosers, setCryptoLosers] = useState<Crypto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadCryptoData() {
+      try {
+        setLoading(true);
+        const [trending, gainers, losers] = await Promise.all([
+          fetchCryptoData(),
+          fetchCryptoGainers(),
+          fetchCryptoLosers()
+        ]);
+        
+        setTrendingCrypto(trending.slice(0, 8));
+        setCryptoGainers(gainers.slice(0, 8));
+        setCryptoLosers(losers.slice(0, 8));
+      } catch (error) {
+        console.error('Error loading crypto data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCryptoData();
+    
+    // Refresh data every 30 seconds
+    const interval = setInterval(loadCryptoData, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative z-10 py-20 border-t border-white/5">
@@ -100,88 +108,117 @@ export default function CryptoSection() {
           </div>
 
           {/* Content based on active tab */}
-          {activeTab === "trends" && (
-            <div className="overflow-x-auto pb-4">
-              <div className="flex gap-4 min-w-max">
-                {trendingCrypto.map((crypto) => (
-                  <Link
-                    key={crypto.symbol}
-                    href="#"
-                    className="flex-shrink-0 w-56 p-5 rounded-xl bg-gradient-to-br from-orange-500/5 via-purple-500/5 to-blue-500/5 border border-white/[0.08] hover:border-orange-400/30 transition-all group"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center text-xl border border-orange-400/20 group-hover:scale-110 transition-transform">
-                        {crypto.logo}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-white truncate">{crypto.symbol.split('USDT')[0]}</div>
-                        <div className="text-xs text-gray-400 truncate">{crypto.name}</div>
-                      </div>
-                    </div>
-                    <div className="text-xl font-bold text-white mb-2">${crypto.price}</div>
-                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-semibold ${
-                      crypto.isPositive 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      {crypto.isPositive ? '▲' : '▼'} {crypto.change}
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
             </div>
-          )}
+          ) : (
+            <>
+              {activeTab === "trends" && (
+                <div className="overflow-x-auto pb-4">
+                  <div className="flex gap-4 min-w-max">
+                    {trendingCrypto.map((crypto) => (
+                      <Link
+                        key={crypto.symbol}
+                        href="#"
+                        className="flex-shrink-0 w-56 p-5 rounded-xl bg-gradient-to-br from-orange-500/5 via-purple-500/5 to-blue-500/5 border border-white/[0.08] hover:border-orange-400/30 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-full flex items-center justify-center text-xl border border-orange-400/20 group-hover:scale-110 transition-transform overflow-hidden">
+                            {crypto.logo ? (
+                              <img src={crypto.logo} alt={crypto.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-xs">₿</span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-white truncate">{crypto.symbol}</div>
+                            <div className="text-xs text-gray-400 truncate">{crypto.name}</div>
+                          </div>
+                        </div>
+                        <div className="text-xl font-bold text-white mb-2">${crypto.price}</div>
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-semibold ${
+                          crypto.isPositive 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {crypto.isPositive ? '▲' : '▼'} {crypto.change}
+                        </div>
+                        {crypto.marketCap && (
+                          <div className="text-xs text-gray-500 mt-2">Cap: {crypto.marketCap}</div>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {activeTab === "gainers" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cryptoGainers.map((crypto) => (
-                <Link
-                  key={crypto.symbol}
-                  href="#"
-                  className="p-5 rounded-xl bg-gradient-to-br from-green-500/5 to-emerald-500/5 border border-green-500/20 hover:border-green-400/40 transition-all"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center text-xl border border-green-400/20">
-                      {crypto.logo}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-white truncate">{crypto.name}</div>
-                      <div className="text-xs text-gray-400 truncate">{crypto.symbol}</div>
-                    </div>
-                  </div>
-                  <div className="text-lg font-bold text-white mb-2">${crypto.price}</div>
-                  <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/20 text-green-400 text-sm font-bold">
-                    ▲ {crypto.change}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+              {activeTab === "gainers" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {cryptoGainers.map((crypto) => (
+                    <Link
+                      key={crypto.symbol}
+                      href="#"
+                      className="p-5 rounded-xl bg-gradient-to-br from-green-500/5 to-emerald-500/5 border border-green-500/20 hover:border-green-400/40 transition-all"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center text-xl border border-green-400/20 overflow-hidden">
+                          {crypto.logo ? (
+                            <img src={crypto.logo} alt={crypto.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs">₿</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{crypto.name}</div>
+                          <div className="text-xs text-gray-400 truncate">{crypto.symbol}</div>
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold text-white mb-2">${crypto.price}</div>
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-green-500/20 text-green-400 text-sm font-bold">
+                        ▲ {crypto.change}
+                      </div>
+                      {crypto.marketCap && (
+                        <div className="text-xs text-gray-500 mt-2">Cap: {crypto.marketCap}</div>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
 
-          {activeTab === "losers" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {cryptoLosers.map((crypto) => (
-                <Link
-                  key={crypto.symbol}
-                  href="#"
-                  className="p-5 rounded-xl bg-gradient-to-br from-red-500/5 to-rose-500/5 border border-red-500/20 hover:border-red-400/40 transition-all"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-red-500/20 to-rose-500/20 rounded-full flex items-center justify-center text-xl border border-red-400/20">
-                      {crypto.logo}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-white truncate">{crypto.name}</div>
-                      <div className="text-xs text-gray-400 truncate">{crypto.symbol}</div>
-                    </div>
-                  </div>
-                  <div className="text-lg font-bold text-white mb-2">${crypto.price}</div>
-                  <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-500/20 text-red-400 text-sm font-bold">
-                    ▼ {crypto.change}
-                  </div>
-                </Link>
-              ))}
-            </div>
+              {activeTab === "losers" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {cryptoLosers.map((crypto) => (
+                    <Link
+                      key={crypto.symbol}
+                      href="#"
+                      className="p-5 rounded-xl bg-gradient-to-br from-red-500/5 to-rose-500/5 border border-red-500/20 hover:border-red-400/40 transition-all"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-gradient-to-br from-red-500/20 to-rose-500/20 rounded-full flex items-center justify-center text-xl border border-red-400/20 overflow-hidden">
+                          {crypto.logo ? (
+                            <img src={crypto.logo} alt={crypto.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs">₿</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{crypto.name}</div>
+                          <div className="text-xs text-gray-400 truncate">{crypto.symbol}</div>
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold text-white mb-2">${crypto.price}</div>
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-500/20 text-red-400 text-sm font-bold">
+                        ▼ {crypto.change}
+                      </div>
+                      {crypto.marketCap && (
+                        <div className="text-xs text-gray-500 mt-2">Cap: {crypto.marketCap}</div>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
